@@ -32,11 +32,7 @@ var (
 type Logger struct {
 	l *zerolog.Logger
 
-	sender    Sender
-	senderCtx context.Context
-
-	errCh chan errorMsg
-	sem   chan struct{} // семафор
+	senderReader *senderReader
 }
 
 func init() {
@@ -54,10 +50,8 @@ func New(level Level, opts ...Option) *Logger {
 		opt(l)
 	}
 
-	if l.sender != nil {
-		l.errCh = make(chan errorMsg, 100)
-		l.sem = make(chan struct{}, 5)
-		go l.startErrorSender()
+	if l.senderReader != nil {
+		go l.senderReader.startErrorSender(l.l)
 	}
 
 	return l
@@ -77,12 +71,14 @@ func SetCallerEnabled(enabled bool) {
 
 func (l *Logger) Level(level Level) *Logger {
 	zl := l.l.Level(zerolog.Level(level))
-	return &Logger{l: &zl}
+	l.l = &zl
+	return l
 }
 
 func (l *Logger) With(kvs ...interface{}) *Logger {
 	zl := l.l.With().Fields(kvs).Logger()
-	return &Logger{l: &zl}
+	l.l = &zl
+	return l
 }
 
 func (l *Logger) Debug(msg string, kvs ...interface{}) {
@@ -114,9 +110,9 @@ func (l *Logger) Error(err error, msg string, kvs ...interface{}) {
 	event = withFieldsAndCaller(event, kvs...)
 	event.Msg(msg)
 
-	if l.sender != nil {
+	if l.senderReader != nil {
 		select {
-		case l.errCh <- errorMsg{err: err, msg: msg, kvs: kvs}:
+		case l.senderReader.errCh <- errorMsg{err: err, msg: msg, kvs: kvs}:
 		default:
 			l.l.Warn().Msg("error queue is full, dropping message")
 		}

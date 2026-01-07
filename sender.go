@@ -1,9 +1,18 @@
 package logger
 
-import "context"
+import (
+	"context"
+	"github.com/rs/zerolog"
+)
 
 type Sender interface {
 	Send(ctx context.Context, err error, msg string, kvs ...any) error
+}
+
+type senderReader struct {
+	ctx    context.Context
+	errCh  chan errorMsg
+	sender Sender
 }
 
 type errorMsg struct {
@@ -12,17 +21,10 @@ type errorMsg struct {
 	kvs []any
 }
 
-func (l *Logger) startErrorSender() {
-	for em := range l.errCh {
-		l.sem <- struct{}{}
-		go func(em errorMsg) {
-			defer func() { <-l.sem }()
-
-			if l.sender != nil {
-				if err := l.sender.Send(l.senderCtx, em.err, em.msg, em.kvs...); err != nil {
-					l.l.Error().Err(err).Msg("failed to send error message")
-				}
-			}
-		}(em)
+func (r *senderReader) startErrorSender(l *zerolog.Logger) {
+	for em := range r.errCh {
+		if err := r.sender.Send(r.ctx, em.err, em.msg, em.kvs...); err != nil {
+			l.Error().Err(err).Msg("failed to send error message")
+		}
 	}
 }

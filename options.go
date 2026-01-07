@@ -22,10 +22,13 @@ func WriteToFile(f *os.File) Option {
 	}
 }
 
-func WithErrorSender(senderCtx context.Context, s Sender) Option {
+func WithErrorSender(ctx context.Context, s Sender) Option {
 	return func(l *Logger) {
-		l.sender = s
-		l.senderCtx = senderCtx
+		l.senderReader = &senderReader{
+			ctx:    ctx,
+			sender: s,
+			errCh:  make(chan errorMsg, 10),
+		}
 	}
 }
 

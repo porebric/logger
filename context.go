@@ -6,24 +6,18 @@ import (
 	"github.com/rs/zerolog"
 )
 
+type ctxKey string
+
+const senderReaderCtxKey ctxKey = "sender_reader"
+
 func ToContext(ctx context.Context, logger *Logger) context.Context {
-	return logger.l.WithContext(ctx)
+	return logger.l.WithContext(context.WithValue(ctx, senderReaderCtxKey, logger.senderReader))
 }
 
 func FromContext(ctx context.Context) *Logger {
-	return &Logger{l: zerolog.Ctx(ctx)}
+	sr, ok := ctx.Value(senderReaderCtxKey).(*senderReader)
+	if !ok {
+		sr = nil
+	}
+	return &Logger{l: zerolog.Ctx(ctx), senderReader: sr}
 }
-
-//func loggerFromSpanContext(zl *zerolog.Logger, ctx opentracing.SpanContext) *zerolog.Logger {
-//	spanCtx, ok := ctx.(*jaeger.SpanContext)
-//	if !ok {
-//		return zl
-//	}
-//
-//	logger := zl.With().
-//		Str("trace_id", spanCtx.TraceID().String()).
-//		Str("span_id", spanCtx.SpanID().String()).
-//		Logger()
-//
-//	return &logger
-//}
