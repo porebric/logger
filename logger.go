@@ -31,6 +31,12 @@ var (
 
 type Logger struct {
 	l *zerolog.Logger
+
+	sender    Sender
+	senderCtx context.Context
+
+	errCh chan errorMsg
+	sem   chan struct{} // семафор
 }
 
 func init() {
@@ -46,6 +52,12 @@ func New(level Level, opts ...Option) *Logger {
 	l := &Logger{l: &zl}
 	for _, opt := range opts {
 		opt(l)
+	}
+
+	if l.sender != nil {
+		l.errCh = make(chan errorMsg, 100)
+		l.sem = make(chan struct{}, 5)
+		go l.startErrorSender()
 	}
 
 	return l
@@ -101,6 +113,14 @@ func (l *Logger) Error(err error, msg string, kvs ...interface{}) {
 	event = event.Err(err)
 	event = withFieldsAndCaller(event, kvs...)
 	event.Msg(msg)
+
+	if l.sender != nil {
+		select {
+		case l.errCh <- errorMsg{err: err, msg: msg, kvs: kvs}:
+		default:
+			l.l.Warn().Msg("error queue is full, dropping message")
+		}
+	}
 }
 
 func (l *Logger) Fatal(msg string, kvs ...interface{}) {
