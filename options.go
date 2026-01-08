@@ -1,7 +1,6 @@
 package logger
 
 import (
-	"context"
 	"github.com/rs/zerolog"
 	"os"
 )
@@ -19,16 +18,6 @@ func WriteToFile(f *os.File) Option {
 	return func(l *Logger) {
 		zl := l.l.Output(zerolog.MultiLevelWriter(zerolog.ConsoleWriter{Out: os.Stdout}, f)).With().Logger()
 		l.l = &zl
-	}
-}
-
-func WithErrorSender(ctx context.Context, s Sender) Option {
-	return func(l *Logger) {
-		l.senderReader = &senderReader{
-			ctx:    ctx,
-			sender: s,
-			errCh:  make(chan errorMsg, 10),
-		}
 	}
 }
 

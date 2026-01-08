@@ -31,8 +31,6 @@ var (
 
 type Logger struct {
 	l *zerolog.Logger
-
-	senderReader *senderReader
 }
 
 func init() {
@@ -48,10 +46,6 @@ func New(level Level, opts ...Option) *Logger {
 	l := &Logger{l: &zl}
 	for _, opt := range opts {
 		opt(l)
-	}
-
-	if l.senderReader != nil {
-		go l.senderReader.startErrorSender(l.l)
 	}
 
 	return l
@@ -109,14 +103,6 @@ func (l *Logger) Error(err error, msg string, kvs ...interface{}) {
 	event = event.Err(err)
 	event = withFieldsAndCaller(event, kvs...)
 	event.Msg(msg)
-
-	if l.senderReader != nil {
-		select {
-		case l.senderReader.errCh <- errorMsg{err: err, msg: msg, kvs: kvs}:
-		default:
-			l.l.Warn().Msg("error queue is full, dropping message")
-		}
-	}
 }
 
 func (l *Logger) Fatal(msg string, kvs ...interface{}) {
@@ -145,6 +131,13 @@ func Warn(ctx context.Context, msg string, kvs ...interface{}) {
 
 func Error(ctx context.Context, err error, msg string, kvs ...interface{}) {
 	FromContext(ctx).Error(err, msg, kvs...)
+
+	sr := senderFromContext(ctx)
+	if sr == nil {
+		return
+	}
+
+	sr.write(ctx, errorMsg{err: err, msg: msg, kvs: kvs})
 }
 
 func Fatal(ctx context.Context, msg string, kvs ...interface{}) {
