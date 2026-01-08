@@ -14,21 +14,21 @@ type errorMsg struct {
 	kvs []any
 }
 
-type senderReader struct {
+type SenderReader struct {
 	errCh  chan errorMsg
 	sender Sender
 	logger *Logger
 }
 
-func NewSender(log *Logger, buffer int, sender Sender) *senderReader {
-	return &senderReader{
+func NewSender(log *Logger, buffer int, sender Sender) *SenderReader {
+	return &SenderReader{
 		errCh:  make(chan errorMsg, buffer),
 		logger: log,
 		sender: sender,
 	}
 }
 
-func (r *senderReader) write(ctx context.Context, msg errorMsg) {
+func (r *SenderReader) write(ctx context.Context, msg errorMsg) {
 	select {
 	case r.errCh <- msg:
 	default:
@@ -36,7 +36,7 @@ func (r *senderReader) write(ctx context.Context, msg errorMsg) {
 	}
 }
 
-func (r *senderReader) Run(ctx context.Context) {
+func (r *SenderReader) Run(ctx context.Context) {
 	for em := range r.errCh {
 		if err := r.sender.Send(ctx, em.err, em.msg, em.kvs...); err != nil {
 			r.logger.Error(err, "failed to send error message")
@@ -44,6 +44,10 @@ func (r *senderReader) Run(ctx context.Context) {
 	}
 }
 
-func (r *senderReader) Shutdown(_ context.Context) error {
+func (r *SenderReader) Shutdown(_ context.Context) error {
 	return nil
+}
+
+func (r *SenderReader) Name() string {
+	return "logger sender"
 }

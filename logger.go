@@ -31,6 +31,7 @@ var (
 
 type Logger struct {
 	l *zerolog.Logger
+	s *SenderReader
 }
 
 func init() {
@@ -117,6 +118,11 @@ func (l *Logger) Panic(msg string, kvs ...interface{}) {
 	event.Msg(msg)
 }
 
+func (l *Logger) WithSender(s *SenderReader) *Logger {
+	l.s = s
+	return l
+}
+
 func Debug(ctx context.Context, msg string, kvs ...interface{}) {
 	FromContext(ctx).Debug(msg, kvs...)
 }
@@ -130,14 +136,14 @@ func Warn(ctx context.Context, msg string, kvs ...interface{}) {
 }
 
 func Error(ctx context.Context, err error, msg string, kvs ...interface{}) {
-	FromContext(ctx).Error(err, msg, kvs...)
+	l := FromContext(ctx)
+	l.Error(err, msg, kvs...)
 
-	sr := senderFromContext(ctx)
-	if sr == nil {
+	if l.s == nil {
 		return
 	}
 
-	sr.write(ctx, errorMsg{err: err, msg: msg, kvs: kvs})
+	l.s.write(ctx, errorMsg{err: err, msg: msg, kvs: kvs})
 }
 
 func Fatal(ctx context.Context, msg string, kvs ...interface{}) {
